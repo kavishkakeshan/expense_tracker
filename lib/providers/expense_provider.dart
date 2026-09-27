@@ -1,10 +1,10 @@
-import 'package:expense_tracker/providers/auth_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 
 import '../models/expense_model.dart';
 import '../services/firestore_service.dart';
+import 'auth_provider.dart';
 
 // Service Provider
 final firestoreServiceProvider = Provider<FirestoreService>((ref) {
@@ -14,26 +14,24 @@ final firestoreServiceProvider = Provider<FirestoreService>((ref) {
 // Selected Category Filter State (Default: 'All')
 final selectedCategoryProvider = StateProvider<String>((ref) => 'All');
 
-// Expenses Stream Provider (Auto Refresh when filter changes)
-final expensesStreamProvider = StreamProvider<List<Expense>>((ref) {
+// Stream all expenses for current user
+final allExpensesStreamProvider = StreamProvider<List<Expense>>((ref) {
   final firestoreService = ref.watch(firestoreServiceProvider);
-  final selectedCategory = ref.watch(selectedCategoryProvider);
-  final currentUser = ref.watch(authServiceProvider).currentUser;
+  final authUser = ref.watch(authStateProvider).value ?? ref.watch(authServiceProvider).currentUser;
 
-  
-  if (currentUser == null) {
+  if (authUser == null) {
     return Stream.value([]);
   }
 
-  return firestoreService.getExpenses(
-    userId: currentUser.uid,
-    category: selectedCategory,
-  );
+  return firestoreService.getExpenses(userId: authUser.uid);
 });
 
-// Monthly Total Calculation Provider
+// Backward-compatible expenses stream
+final expensesStreamProvider = allExpensesStreamProvider;
+
+// Monthly Total Calculation Provider (computed across all monthly expenses)
 final monthlyTotalProvider = Provider<double>((ref) {
-  final expensesAsync = ref.watch(expensesStreamProvider);
+  final expensesAsync = ref.watch(allExpensesStreamProvider);
   final firestoreService = ref.watch(firestoreServiceProvider);
 
   return expensesAsync.maybeWhen(
@@ -43,9 +41,9 @@ final monthlyTotalProvider = Provider<double>((ref) {
   );
 });
 
-// Category-wise totals group කරන Provider එක
+// Category-wise totals for Pie Chart
 final categoryTotalsProvider = Provider<Map<String, double>>((ref) {
-  final expensesAsync = ref.watch(expensesStreamProvider);
+  final expensesAsync = ref.watch(allExpensesStreamProvider);
 
   return expensesAsync.maybeWhen(
     data: (expenses) {
@@ -66,17 +64,24 @@ final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.light);
 // Search Query Provider
 final searchQueryProvider = StateProvider<String>((ref) => '');
 
-// Filtered Expenses Provider (Category + Search query filtering)
+// Filtered Expenses Provider (Category + Search query filtering for the list)
 final filteredExpensesProvider = Provider<AsyncValue<List<Expense>>>((ref) {
-  final expensesAsync = ref.watch(expensesStreamProvider);
-  final searchQuery = ref.watch(searchQueryProvider).toLowerCase();
+  final expensesAsync = ref.watch(allExpensesStreamProvider);
+  final selectedCategory = ref.watch(selectedCategoryProvider);
+  final searchQuery = ref.watch(searchQueryProvider).toLowerCase().trim();
 
   return expensesAsync.whenData((expenses) {
-    if (searchQuery.isEmpty) return expenses;
-    return expenses
-        .where((e) =>
-            e.title.toLowerCase().contains(searchQuery) ||
-            (e.note != null && e.note!.toLowerCase().contains(searchQuery)))
-        .toList();
+    var result = expenses;
+    if (selectedCategory != 'All') {
+      result = result.where((e) => e.category == selectedCategory).toList();
+    }
+    if (searchQuery.isNotEmpty) {
+      result = result
+          .where((e) =>
+              e.title.toLowerCase().contains(searchQuery) ||
+              (e.note != null && e.note!.toLowerCase().contains(searchQuery)))
+          .toList();
+    }
+    return result;
   });
 });

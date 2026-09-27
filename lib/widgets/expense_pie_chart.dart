@@ -29,12 +29,15 @@ class ExpensePieChart extends ConsumerWidget {
     final categoryTotals = ref.watch(categoryTotalsProvider);
 
     if (categoryTotals.isEmpty) {
-      return const SizedBox.shrink(); // Expenses නැත්නම් chart එක hide කරන්න
+      return const SizedBox.shrink();
     }
 
     final totalAmount = categoryTotals.values.fold(0.0, (sum, val) => sum + val);
+    if (totalAmount <= 0) {
+      return const SizedBox.shrink();
+    }
 
-    // fl_chart Sections සකස් කිරීම
+    // fl_chart Sections
     final sections = categoryTotals.entries.map((entry) {
       final percentage = (entry.value / totalAmount) * 100;
       return PieChartSectionData(
