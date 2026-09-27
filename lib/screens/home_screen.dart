@@ -33,12 +33,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     super.dispose();
   }
 
+  Future<void> _selectMonth(BuildContext context, DateTime currentMonth) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: currentMonth,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2035),
+      initialDatePickerMode: DatePickerMode.year,
+      helpText: 'Select Month & Year',
+    );
+    if (picked != null) {
+      ref.read(selectedMonthProvider.notifier).state =
+          DateTime(picked.year, picked.month);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Riverpod Providers watch කිරීම
     final expensesAsync = ref.watch(filteredExpensesProvider);
     final monthlyTotal = ref.watch(monthlyTotalProvider);
     final selectedCategory = ref.watch(selectedCategoryProvider);
+    final selectedMonth = ref.watch(selectedMonthProvider);
+
+    final now = DateTime.now();
+    final isCurrentMonth =
+        selectedMonth.year == now.year && selectedMonth.month == now.month;
 
     return Scaffold(
       appBar: AppBar(
@@ -54,11 +73,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             tooltip: 'Toggle Theme',
             onPressed: () {
               final currentMode = ref.read(themeModeProvider);
-              ref
-                  .read(themeModeProvider.notifier)
-                  .state = currentMode == ThemeMode.dark
-                  ? ThemeMode.light
-                  : ThemeMode.dark;
+              ref.read(themeModeProvider.notifier).state =
+                  currentMode == ThemeMode.dark
+                      ? ThemeMode.light
+                      : ThemeMode.dark;
             },
           ),
           IconButton(
@@ -80,6 +98,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 suffixIcon: ref.watch(searchQueryProvider).isNotEmpty
                     ? IconButton(
                         icon: const Icon(Icons.clear),
+                        tooltip: 'Clear search',
                         onPressed: () {
                           _searchController.clear();
                           ref.read(searchQueryProvider.notifier).state = '';
@@ -98,34 +117,159 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               },
             ),
           ),
-          // Monthly Summary Card
+
+          // Interactive Monthly Summary & Navigation Card
           Container(
             margin: const EdgeInsets.all(16),
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             width: double.infinity,
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.primaryContainer,
               borderRadius: BorderRadius.circular(16),
             ),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  'Total Expenses (${DateFormat('MMMM yyyy').format(DateTime.now())})',
-                  style: Theme.of(context).textTheme.titleSmall,
+                // Month Navigation Header
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.chevron_left),
+                      tooltip: 'Previous month',
+                      onPressed: () {
+                        final prev = DateTime(
+                          selectedMonth.year,
+                          selectedMonth.month - 1,
+                        );
+                        ref.read(selectedMonthProvider.notifier).state = prev;
+                      },
+                    ),
+                    Semantics(
+                      button: true,
+                      label:
+                          'Change month. Currently showing ${DateFormat('MMMM yyyy').format(selectedMonth)}',
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: () => _selectMonth(context, selectedMonth),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.calendar_month,
+                                size: 20,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onPrimaryContainer,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                DateFormat('MMMM yyyy').format(selectedMonth),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onPrimaryContainer,
+                                    ),
+                              ),
+                              const SizedBox(width: 4),
+                              Icon(
+                                Icons.arrow_drop_down,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onPrimaryContainer,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.chevron_right),
+                      tooltip: 'Next month',
+                      onPressed: () {
+                        final next = DateTime(
+                          selectedMonth.year,
+                          selectedMonth.month + 1,
+                        );
+                        ref.read(selectedMonthProvider.notifier).state = next;
+                      },
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'LKR ${monthlyTotal.toStringAsFixed(2)}',
-                  style: Theme.of(context).textTheme.headlineMedium
-                      ?.copyWith(fontWeight: FontWeight.bold),
+                const Divider(height: 12),
+                const SizedBox(height: 4),
+                // Monthly Total Row
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Total Expenses',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleSmall
+                                ?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onPrimaryContainer
+                                      .withOpacity(0.85),
+                                ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'LKR ${monthlyTotal.toStringAsFixed(2)}',
+                            style: Theme.of(context)
+                                .textTheme
+                                .headlineMedium
+                                ?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onPrimaryContainer,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (!isCurrentMonth)
+                      FilledButton.tonalIcon(
+                        style: FilledButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                        ),
+                        icon: const Icon(Icons.today, size: 16),
+                        label: const Text('Current Month'),
+                        onPressed: () {
+                          final currentNow = DateTime.now();
+                          ref.read(selectedMonthProvider.notifier).state =
+                              DateTime(currentNow.year, currentNow.month);
+                        },
+                      ),
+                  ],
                 ),
               ],
             ),
           ),
 
-          // Expense Pie Chart
+          // Expense Pie Chart (Filtered for selected month)
           const ExpensePieChart(),
+
           // Filter Chips
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -139,7 +283,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     label: Text(cat),
                     selected: isSelected,
                     onSelected: (_) {
-                      // Riverpod state update කිරීම
                       ref.read(selectedCategoryProvider.notifier).state = cat;
                     },
                   ),
@@ -157,17 +300,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   Center(child: Text('Error loading expenses: $err')),
               data: (expenses) {
                 if (expenses.isEmpty) {
-                  return const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.receipt_long, size: 64, color: Colors.grey),
-                        SizedBox(height: 12),
-                        Text(
-                          'No expenses recorded yet.',
-                          style: TextStyle(color: Colors.grey, fontSize: 16),
-                        ),
-                      ],
+                  final formattedMonth =
+                      DateFormat('MMMM yyyy').format(selectedMonth);
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24.0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.receipt_long,
+                            size: 64,
+                            color: Colors.grey,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            selectedCategory != 'All'
+                                ? 'No $selectedCategory expenses recorded for $formattedMonth.'
+                                : 'No expenses recorded for $formattedMonth.',
+                            style: const TextStyle(
+                              color: Colors.grey,
+                              fontSize: 16,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
                     ),
                   );
                 }
@@ -208,7 +366,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 Icons.delete_outline,
                                 color: Colors.grey,
                               ),
-                              tooltip: 'Delete',
+                              tooltip: 'Delete expense',
                               onPressed: () => _confirmDelete(context, item.id),
                             ),
                           ],
@@ -233,6 +391,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
+        tooltip: 'Add new expense',
         onPressed: () {
           Navigator.push(
             context,

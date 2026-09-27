@@ -73,7 +73,6 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
     // Form validation check කිරීම
     if (!_formKey.currentState!.validate()) return;
 
-    // 1. දැනට login වෙලා ඉන්න user ව ලබාගැනීම
     final currentUser = ref.read(authServiceProvider).currentUser;
     if (currentUser == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -90,10 +89,9 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
     try {
       final firestoreService = ref.read(firestoreServiceProvider);
 
-      
       final expenseData = Expense(
         id: widget.expense?.id ?? '',
-        userId: currentUser.uid, 
+        userId: currentUser.uid,
         title: _titleController.text.trim(),
         amount: double.parse(_amountController.text.trim()),
         category: _selectedCategory,
@@ -109,7 +107,14 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
         await firestoreService.updateExpense(expenseData);
       }
 
-      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        // Switch HomeScreen's view to match the date of the saved expense
+        ref.read(selectedMonthProvider.notifier).state = DateTime(
+          _selectedDate.year,
+          _selectedDate.month,
+        );
+        Navigator.pop(context);
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
